@@ -11,7 +11,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.Activity;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -25,8 +28,11 @@ public class MainActivity extends Activity {
 	TextView stockDisplay;
 	Button goButton;
 	Thread loadPage;
-	String stockPage;
-
+	String URL, stockName;
+	StringBuilder inputBuilder;
+	
+	
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -42,59 +48,65 @@ public class MainActivity extends Activity {
 			
 			@Override
 			public void onClick(View v) {
+
+				URL = "http://finance.yahoo.com/webservice/v1/symbols/" 
+						+ stock.getText().toString() + "/quote?format=json";
 				
-				/*Create user's stock object*/
-				Stock userStock = new Stock();
+				/*Initial run*/
+				new DownloadStock().execute(URL);
+				stockName = stock.getText().toString();
 				
-				/*Load stock string from url*/
-				loadPage.start();
+			/*Thread and handler for updates*/	
+			final Handler threadHandler = new Handler();
 				
-				/*Wait for thread to finish*/
-				try {
-					loadPage.join();
-				} catch (InterruptedException e1) {
-					// TODO Auto-generated catch block
-					e1.printStackTrace();
-				}
+				Thread loadStock = new Thread(){
+					public void run(){
+						String localStock = stockName;
+						while(localStock == stockName){
+						
+						try {
+							Thread.sleep(10000);
+							threadHandler.post(new Runnable(){
+								@Override 
+								public void run(){
+									new DownloadStock().execute(URL);
+								}
+							});
+							
+							
+						} catch (InterruptedException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						
+					}
+					}
+				};
 				
-				
-				/*Get company and price from stock string and put in stock object*/
-				String[] st = stockPage.split("\"");
-				userStock.setCompany(st[25]);
-				userStock.setPrice(Double.parseDouble(st[29]));
-				
-				
-				/*Create a JSON object of the stock*/
-				Json object = new Json(userStock);
-				try {
-					object.toJSON();
-				} catch (JSONException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-				
-				/*Display the JSON Object information in the display*/
-				stockDisplay.setText("Company Name:  " + object.getCompany() + "\n" + "Price:  " + object.getPrice());
+				loadStock.start();
 
 				
-				
 			}
-		});
-		
-		
-		/*Thread for network*/
-		loadPage = new Thread(){
-			@Override
-			public void run(){
-				String URL = "http://finance.yahoo.com/webservice/v1/symbols/" 
-						+ stock.getText().toString() + "/quote?format=json";
-				StringBuilder inputBuilder = new StringBuilder();
-				String input;
 				
+			});
+
+	
+	}
+
+	
+	
+	
+	private class DownloadStock extends AsyncTask<String, String, String>{
+	
+
+		@Override
+		protected String doInBackground(String... params) {
 				URL userInput;
+				String stockPage, input;
+				inputBuilder = new StringBuilder();
 				
 					try {
-						userInput = new URL(URL);
+						userInput = new URL(params[0]);
 					
 				
 				BufferedReader in;
@@ -117,13 +129,41 @@ public class MainActivity extends Activity {
 				}
 			
 			stockPage = inputBuilder.toString();
+			return stockPage;
+		}
+		protected void onPostExecute(String result){
 			
+			/*Get company and price from stock string and put in stock object*/
+			Stock userStock = new Stock();
+			String[] st = result.toString().split("\"");
+			userStock.setCompany(st[25]);
+			userStock.setPrice(Double.parseDouble(st[29]));
+			
+			
+			/*Create a JSON object of the stock*/
+			Json object = new Json(userStock);
+			try {
+				object.toJSON();
+			} catch (JSONException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
-		};
-		
+			
+			/*Display the JSON Object information in the display*/
+			stockDisplay.setText("Company Name:  " + object.getCompany() + "\n" + "Price:  " + object.getPrice());
+			
+			
+		}
+
+	}
+
+	
+	
 		
 	}
-}
+	
+	
+			
 
 
 
